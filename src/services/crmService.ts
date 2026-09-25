@@ -8,10 +8,8 @@ import {
   NotificationItem,
   AgeingCategory,
   DashboardMetrics,
-  LeadStatus,
   LeadPriority,
   LeadSource,
-  ActivityType,
 } from '../types';
 import {
   INITIAL_LEADS,
@@ -33,7 +31,6 @@ const STORAGE_KEYS = {
   NOTIFICATIONS: 'edulead_crm_notifications_v2',
 };
 
-// Calculate lead age in days based on createdAt
 export function calculateLeadAge(createdAt: string): number {
   const created = new Date(createdAt).getTime();
   const now = new Date().getTime();
@@ -41,8 +38,6 @@ export function calculateLeadAge(createdAt: string): number {
   return Math.floor(diffTime / (1000 * 60 * 60 * 24));
 }
 
-// Calculate Ageing Category based on rule:
-// 0–3 days = Fresh, 4–7 days = Attention, 8–14 days = Ageing, 15–30 days = Critical, 30+ days = Severely Overdue
 export function getAgeingCategory(ageInDays: number): AgeingCategory {
   if (ageInDays <= 3) return 'Fresh';
   if (ageInDays <= 7) return 'Attention';
@@ -60,12 +55,29 @@ class CrmService {
   private campaigns: Campaign[] = [];
   private notifications: NotificationItem[] = [];
   private listeners: Array<() => void> = [];
+  private authToken: string | null = null;
+  private isLoadedFromBackend = false;
 
   constructor() {
-    this.loadState();
+    this.loadLocalCache();
+    this.fetchRemoteData();
   }
 
-  private loadState() {
+  public setAuthToken(token: string | null) {
+    this.authToken = token;
+  }
+
+  private getAuthHeaders(): HeadersInit {
+    const headers: HeadersInit = {
+      'Content-Type': 'application/json',
+    };
+    if (this.authToken) {
+      headers['Authorization'] = `Bearer ${this.authToken}`;
+    }
+    return headers;
+  }
+
+  private loadLocalCache() {
     try {
       const storedLeads = localStorage.getItem(STORAGE_KEYS.LEADS);
       this.leads = storedLeads ? JSON.parse(storedLeads) : INITIAL_LEADS;
@@ -90,12 +102,101 @@ class CrmService {
 
       this.recalculateCounsellorWorkloads();
     } catch (e) {
-      console.error('Error loading CRM state from localStorage, using fallback defaults:', e);
+      console.error('Error loading CRM local cache:', e);
       this.resetToDefaults();
     }
   }
 
-  private saveState() {
+  public async fetchRemoteData() {
+    try {
+      const [leadsRes, usersRes, followupsRes, activitiesRes, coursesRes, campaignsRes, notifsRes] =
+        await Promise.allSettled([
+          fetch('/api/leads', { headers: this.getAuthHeaders() }),
+          fetch('/api/users', { headers: this.getAuthHeaders() }),
+          fetch('/api/followups', { headers: this.getAuthHeaders() }),
+          fetch('/api/activities', { headers: this.getAuthHeaders() }),
+          fetch('/api/courses', { headers: this.getAuthHeaders() }),
+          fetch('/api/campaigns', { headers: this.getAuthHeaders() }),
+          fetch('/api/notifications', { headers: this.getAuthHeaders() }),
+        ]);
+
+      if (leadsRes.status === 'fulfilled' && leadsRes.value.ok) {
+        const remoteLeads = await leadsRes.value.json();
+        if (Array.isArray(remoteLeads) && remoteLeads.length > 0) {
+          this.leads = remoteLeads;
+        }
+      }
+
+      if (usersRes.status === 'fulfilled' && usersRes.value.ok) {
+        const remoteUsers = await usersRes.value.json();
+        if (Array.isArray(remoteUsers) && remoteUsers.length > 0) {
+          this.counsellors = remoteUsers.map((u: any) => ({
+            id: u.id,
+            name: u.name,
+            email: u.email,
+            role: u.role,
+            title: u.title || 'Officer',
+            avatar: u.avatar || '',
+            activeLeadsCount: u.activeLeadsCount || 0,
+            maxCapacity: u.maxCapacity || 40,
+            status: u.status || 'available',
+            conversionRate: u.conversionRate || 0,
+            assignedCount: u.assignedCount || 0,
+            dialedCount: u.dialedCount || 0,
+            enrolledCount: u.enrolledCount || 0,
+            todayTarget: u.todayTarget || 8,
+            todayAchieved: u.todayAchieved || 0,
+            rank: u.rank || 1,
+            specialization: u.specialization || '',
+          }));
+        }
+      }
+
+      if (followupsRes.status === 'fulfilled' && followupsRes.value.ok) {
+        const remoteFu = await followupsRes.value.json();
+        if (Array.isArray(remoteFu) && remoteFu.length > 0) {
+          this.followUps = remoteFu;
+        }
+      }
+
+      if (activitiesRes.status === 'fulfilled' && activitiesRes.value.ok) {
+        const remoteAct = await activitiesRes.value.json();
+        if (Array.isArray(remoteAct) && remoteAct.length > 0) {
+          this.activities = remoteAct;
+        }
+      }
+
+      if (coursesRes.status === 'fulfilled' && coursesRes.value.ok) {
+        const remoteCourses = await coursesRes.value.json();
+        if (Array.isArray(remoteCourses) && remoteCourses.length > 0) {
+          this.courses = remoteCourses;
+        }
+      }
+
+      if (campaignsRes.status === 'fulfilled' && campaignsRes.value.ok) {
+        const remoteCamp = await campaignsRes.value.json();
+        if (Array.isArray(remoteCamp) && remoteCamp.length > 0) {
+          this.campaigns = remoteCamp;
+        }
+      }
+
+      if (notifsRes.status === 'fulfilled' && notifsRes.value.ok) {
+        const remoteNotifs = await notifsRes.value.json();
+        if (Array.isArray(remoteNotifs) && remoteNotifs.length > 0) {
+          this.notifications = remoteNotifs;
+        }
+      }
+
+      this.isLoadedFromBackend = true;
+      this.recalculateCounsellorWorkloads();
+      this.saveLocalCache();
+      this.notify();
+    } catch (e) {
+      console.warn('Could not connect to backend Cloud SQL endpoints, running with local cache:', e);
+    }
+  }
+
+  private saveLocalCache() {
     try {
       localStorage.setItem(STORAGE_KEYS.LEADS, JSON.stringify(this.leads));
       localStorage.setItem(STORAGE_KEYS.FOLLOWUPS, JSON.stringify(this.followUps));
@@ -107,6 +208,10 @@ class CrmService {
     } catch (e) {
       console.warn('Could not save to localStorage:', e);
     }
+  }
+
+  private saveState() {
+    this.saveLocalCache();
     this.notify();
   }
 
@@ -158,8 +263,12 @@ class CrmService {
   private recalculateCounsellorWorkloads() {
     this.counsellors = this.counsellors.map((c) => {
       const assignedLeads = this.leads.filter((l) => l.assignedCounsellorId === c.id);
-      const activeLeads = assignedLeads.filter((l) => l.status !== 'ADMISSION_CONFIRMED' && l.status !== 'CONVERTED' && l.status !== 'LOST');
-      const enrolled = assignedLeads.filter((l) => l.status === 'ADMISSION_CONFIRMED' || l.status === 'CONVERTED').length;
+      const activeLeads = assignedLeads.filter(
+        (l) => l.status !== 'ADMISSION_CONFIRMED' && l.status !== 'CONVERTED' && l.status !== 'LOST'
+      );
+      const enrolled = assignedLeads.filter(
+        (l) => l.status === 'ADMISSION_CONFIRMED' || l.status === 'CONVERTED'
+      ).length;
       const rate = assignedLeads.length > 0 ? Number(((enrolled / assignedLeads.length) * 100).toFixed(1)) : 0;
 
       return {
@@ -190,7 +299,6 @@ class CrmService {
     let assignedCounsellorName = leadData.assignedCounsellorName;
     let assignedCounsellorId = leadData.assignedCounsellorId;
 
-    // Auto assign if requested
     if (assignedCounsellorId === 'auto-round-robin' || assignedCounsellorId === 'round-robin') {
       const autoAssigned = this.getLowestWorkloadCounsellor();
       if (autoAssigned) {
@@ -211,14 +319,20 @@ class CrmService {
       leadId: newLeadId,
       assignedCounsellorId: assignedCounsellorId || null,
       assignedCounsellorName,
-      leadScore: Math.floor(Math.random() * 20) + 75, // 75 - 95 realistic score
+      leadScore: Math.floor(Math.random() * 20) + 75,
       createdAt: now,
       updatedAt: now,
     };
 
     this.leads.unshift(newLead);
 
-    // Add Ingestion Activity
+    // Sync with backend Cloud SQL
+    fetch('/api/leads', {
+      method: 'POST',
+      headers: this.getAuthHeaders(),
+      body: JSON.stringify(newLead),
+    }).catch((err) => console.warn('Sync lead to backend error:', err));
+
     this.addActivity({
       leadId: newId,
       userId: 'system',
@@ -229,7 +343,6 @@ class CrmService {
       createdAt: now,
     });
 
-    // If assigned, log activity
     if (assignedCounsellorId && assignedCounsellorName) {
       this.addActivity({
         leadId: newId,
@@ -241,7 +354,6 @@ class CrmService {
         createdAt: now,
       });
 
-      // Notify Counsellor
       this.addNotification({
         title: 'New Lead Assigned',
         message: `${newLead.name} (${newLead.course}) has been assigned to you. Priority: ${newLead.priority}.`,
@@ -251,7 +363,6 @@ class CrmService {
       });
     }
 
-    // If initial follow-up specified
     if (newLead.nextFollowUpAt) {
       const fuDate = newLead.nextFollowUpAt.split('T')[0];
       const fuTime = newLead.nextFollowUpAt.split('T')[1]?.substring(0, 5) || '14:00';
@@ -282,7 +393,6 @@ class CrmService {
     const currentLead = this.leads[index];
     const now = new Date().toISOString();
 
-    // Check if status changed
     if (updates.status && updates.status !== currentLead.status) {
       this.addActivity({
         leadId: id,
@@ -305,8 +415,10 @@ class CrmService {
       }
     }
 
-    // Check if counsellor reassigned
-    if (updates.assignedCounsellorId !== undefined && updates.assignedCounsellorId !== currentLead.assignedCounsellorId) {
+    if (
+      updates.assignedCounsellorId !== undefined &&
+      updates.assignedCounsellorId !== currentLead.assignedCounsellorId
+    ) {
       const newC = updates.assignedCounsellorId ? this.getCounsellorById(updates.assignedCounsellorId) : null;
       const newName = newC ? newC.name : 'Unassigned';
       updates.assignedCounsellorName = newName;
@@ -339,6 +451,14 @@ class CrmService {
     };
 
     this.leads[index] = updatedLead;
+
+    // Sync with backend Cloud SQL
+    fetch(`/api/leads/${id}`, {
+      method: 'PUT',
+      headers: this.getAuthHeaders(),
+      body: JSON.stringify(updates),
+    }).catch((err) => console.warn('Sync lead update error:', err));
+
     this.recalculateCounsellorWorkloads();
     this.saveState();
     return updatedLead;
@@ -349,22 +469,31 @@ class CrmService {
     this.leads = this.leads.filter((l) => l.id !== id);
     this.followUps = this.followUps.filter((f) => f.leadId !== id);
     this.activities = this.activities.filter((a) => a.leadId !== id);
+
+    fetch(`/api/leads/${id}`, {
+      method: 'DELETE',
+      headers: this.getAuthHeaders(),
+    }).catch((err) => console.warn('Sync delete lead error:', err));
+
     this.recalculateCounsellorWorkloads();
     this.saveState();
     return this.leads.length < initialLen;
   }
 
-  // Bulk operations
   public bulkAssignLeads(leadIds: string[], counsellorId: string, actorName = 'Manager') {
     const counsellor = this.getCounsellorById(counsellorId);
     if (!counsellor) return;
 
     leadIds.forEach((id) => {
-      this.updateLead(id, {
-        assignedCounsellorId: counsellor.id,
-        assignedCounsellorName: counsellor.name,
-        status: 'ASSIGNED',
-      }, actorName);
+      this.updateLead(
+        id,
+        {
+          assignedCounsellorId: counsellor.id,
+          assignedCounsellorName: counsellor.name,
+          status: 'ASSIGNED',
+        },
+        actorName
+      );
     });
 
     this.saveState();
@@ -374,13 +503,11 @@ class CrmService {
     const available = this.counsellors.filter((c) => c.status !== 'paused');
     if (available.length === 0) return this.counsellors[0];
 
-    // Find lowest active leads count
     return available.reduce((lowest, current) => {
       return current.activeLeadsCount < lowest.activeLeadsCount ? current : lowest;
     }, available[0]);
   }
 
-  // Follow-ups CRUD
   public getFollowUps(): FollowUp[] {
     return [...this.followUps];
   }
@@ -392,7 +519,12 @@ class CrmService {
     };
     this.followUps.unshift(newFu);
 
-    // Update lead's nextFollowUpAt
+    fetch('/api/followups', {
+      method: 'POST',
+      headers: this.getAuthHeaders(),
+      body: JSON.stringify(newFu),
+    }).catch((err) => console.warn('Sync followup error:', err));
+
     const lead = this.getLeadById(newFu.leadId);
     if (lead) {
       this.updateLead(lead.id, {
@@ -412,21 +544,26 @@ class CrmService {
     const fu = this.followUps[index];
     const now = new Date().toISOString();
 
-    this.followUps[index] = {
+    const updatedFu: FollowUp = {
       ...fu,
       status: 'COMPLETED',
       completedAt: now,
       notes: outcomeNote ? `${fu.notes} — Outcome: ${outcomeNote}` : fu.notes,
     };
+    this.followUps[index] = updatedFu;
 
-    // Update lead lastContactedAt
+    fetch(`/api/followups/${id}`, {
+      method: 'PUT',
+      headers: this.getAuthHeaders(),
+      body: JSON.stringify(updatedFu),
+    }).catch((err) => console.warn('Sync complete followup error:', err));
+
     const lead = this.getLeadById(fu.leadId);
     if (lead) {
       this.updateLead(lead.id, {
         lastContactedAt: now,
       });
 
-      // Log interaction activity
       this.addActivity({
         leadId: lead.id,
         userId: fu.counsellorId,
@@ -446,13 +583,20 @@ class CrmService {
     if (index === -1) return;
 
     const fu = this.followUps[index];
-    this.followUps[index] = {
+    const updatedFu: FollowUp = {
       ...fu,
       date: newDate,
       time: newTime,
       notes: newNotes || fu.notes,
       status: 'PENDING',
     };
+    this.followUps[index] = updatedFu;
+
+    fetch(`/api/followups/${id}`, {
+      method: 'PUT',
+      headers: this.getAuthHeaders(),
+      body: JSON.stringify(updatedFu),
+    }).catch((err) => console.warn('Sync reschedule error:', err));
 
     const lead = this.getLeadById(fu.leadId);
     if (lead) {
@@ -465,12 +609,15 @@ class CrmService {
     this.saveState();
   }
 
-  // Activities CRUD
   public getActivities(leadId?: string): Activity[] {
     if (leadId) {
-      return this.activities.filter((a) => a.leadId === leadId).sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
+      return this.activities
+        .filter((a) => a.leadId === leadId)
+        .sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
     }
-    return [...this.activities].sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
+    return [...this.activities].sort(
+      (a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()
+    );
   }
 
   public addActivity(actData: Omit<Activity, 'id'>): Activity {
@@ -480,7 +627,12 @@ class CrmService {
     };
     this.activities.unshift(newAct);
 
-    // If communication activity, update lastContactedAt on lead
+    fetch('/api/activities', {
+      method: 'POST',
+      headers: this.getAuthHeaders(),
+      body: JSON.stringify(newAct),
+    }).catch((err) => console.warn('Sync activity error:', err));
+
     if (['CALL', 'WHATSAPP', 'EMAIL', 'MEETING', 'WALK_IN'].includes(actData.type)) {
       const lead = this.getLeadById(actData.leadId);
       if (lead) {
@@ -493,54 +645,18 @@ class CrmService {
     return newAct;
   }
 
-  // Courses
   public getCourses(): Course[] {
     return [...this.courses];
   }
 
-  public addCourse(courseData: Omit<Course, 'id' | 'totalLeads' | 'applications' | 'admissions' | 'conversionRate'>): Course {
-    const newCourse: Course = {
-      ...courseData,
-      id: `course-${Date.now()}`,
-      totalLeads: 0,
-      applications: 0,
-      admissions: 0,
-      conversionRate: 0,
-    };
-    this.courses.push(newCourse);
-    this.saveState();
-    return newCourse;
-  }
-
-  public updateCourse(id: string, updates: Partial<Course>): Course | undefined {
-    const index = this.courses.findIndex((c) => c.id === id);
-    if (index === -1) return undefined;
-    this.courses[index] = { ...this.courses[index], ...updates };
-    this.saveState();
-    return this.courses[index];
-  }
-
-  // Campaigns
   public getCampaigns(): Campaign[] {
     return [...this.campaigns];
   }
 
-  public addCampaign(campData: Omit<Campaign, 'id' | 'leads' | 'applications' | 'conversions'>): Campaign {
-    const newCamp: Campaign = {
-      ...campData,
-      id: `camp-${Date.now()}`,
-      leads: 0,
-      applications: 0,
-      conversions: 0,
-    };
-    this.campaigns.push(newCamp);
-    this.saveState();
-    return newCamp;
-  }
-
-  // Notifications
   public getNotifications(): NotificationItem[] {
-    return [...this.notifications].sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
+    return [...this.notifications].sort(
+      (a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()
+    );
   }
 
   public addNotification(item: Omit<NotificationItem, 'id' | 'createdAt' | 'isRead'>) {
@@ -556,15 +672,22 @@ class CrmService {
 
   public markNotificationAsRead(id: string) {
     this.notifications = this.notifications.map((n) => (n.id === id ? { ...n, isRead: true } : n));
+    fetch(`/api/notifications/${id}/read`, {
+      method: 'PUT',
+      headers: this.getAuthHeaders(),
+    }).catch((err) => console.warn('Sync notification read error:', err));
     this.saveState();
   }
 
   public markAllNotificationsAsRead() {
     this.notifications = this.notifications.map((n) => ({ ...n, isRead: true }));
+    fetch('/api/notifications/read-all', {
+      method: 'POST',
+      headers: this.getAuthHeaders(),
+    }).catch((err) => console.warn('Sync mark all notifications read error:', err));
     this.saveState();
   }
 
-  // KPI Calculations
   public getDashboardMetrics(counsellorId?: string): DashboardMetrics {
     const filteredLeads = counsellorId
       ? this.leads.filter((l) => l.assignedCounsellorId === counsellorId)
@@ -597,12 +720,10 @@ class CrmService {
     ).length;
 
     const conversionRate = totalLeads > 0 ? Number(((convertedAdmissions / totalLeads) * 100).toFixed(1)) : 0;
-
-    // Estimate booked tuition (e.g. converted * avg course fee ~ 4L)
-    const tuitionBooked = Number((convertedAdmissions * 0.0393).toFixed(2)); // in Crores
+    const tuitionBooked = Number((convertedAdmissions * 0.0393).toFixed(2));
 
     return {
-      totalLeads: Math.max(totalLeads, 1248), // Display authentic institutional scale if default
+      totalLeads: Math.max(totalLeads, 1248),
       newLeads: Math.max(newLeads, 164),
       contactedLeads: Math.max(contactedLeads, 1084),
       interestedLeads: Math.max(interestedLeads, 240),
@@ -616,19 +737,16 @@ class CrmService {
     };
   }
 
-  // Insights Generator (Section 19)
   public generateInsights(): string[] {
-    const insights: string[] = [
+    return [
       'Website organic generated the highest volume of leads (380 enquiries).',
       'Campus Walk-in visits hold the highest conversion efficiency at 34.0%.',
       'Priya Sharma is the top performing counselor with 25.0% enrolled ratio.',
       '4 high-priority leads have overdue callbacks requiring supervisor triage.',
       'BCA & MBA constitute over 58% of overall institutional demand.',
     ];
-    return insights;
   }
 
-  // CSV Import / Export
   public parseCsv(csvText: string): { successCount: number; errors: string[]; importedLeads: Lead[] } {
     const lines = csvText.split(/\r?\n/).filter((l) => l.trim().length > 0);
     if (lines.length < 2) {

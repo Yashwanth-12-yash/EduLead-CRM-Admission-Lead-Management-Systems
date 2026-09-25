@@ -1,4 +1,5 @@
 import React from 'react';
+import { AuthProvider } from './context/AuthContext';
 import { CrmProvider, useCrm } from './context/CrmContext';
 import { Header } from './components/layout/Header';
 import { Sidebar } from './components/layout/Sidebar';
@@ -96,8 +97,10 @@ const MainContent: React.FC = () => {
 
 export default function App() {
   return (
-    <CrmProvider>
-      <MainContent />
-    </CrmProvider>
+    <AuthProvider>
+      <CrmProvider>
+        <MainContent />
+      </CrmProvider>
+    </AuthProvider>
   );
 }

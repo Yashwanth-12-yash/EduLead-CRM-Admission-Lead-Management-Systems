@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import { useCrm } from '../../context/CrmContext';
 import { useAuth } from '../../context/AuthContext';
 import { Role } from '../../types';
+import { getSafeAvatarUrl } from '../../services/crmService';
 
 interface HeaderProps {
   title?: string;
@@ -186,7 +187,7 @@ export const Header: React.FC<HeaderProps> = ({ title, onBack, showBack = false 
               <img
                 alt={authUser?.displayName || currentUser.name}
                 className="w-8 h-8 rounded-full object-cover shadow-sm ring-1 ring-white"
-                src={authUser?.photoURL || currentUser.avatar}
+                src={getSafeAvatarUrl(authUser?.photoURL || currentUser.avatar, authUser?.displayName || currentUser.name)}
               />
               <span className="absolute bottom-1 right-1 w-2.5 h-2.5 rounded-full bg-emerald-500 shadow-[0_0_0_2px_#ffffff]"></span>
             </button>
@@ -201,7 +202,7 @@ export const Header: React.FC<HeaderProps> = ({ title, onBack, showBack = false 
                       <img
                         alt={authUser?.displayName || currentUser.name}
                         className="w-10 h-10 rounded-full object-cover"
-                        src={authUser?.photoURL || currentUser.avatar}
+                        src={getSafeAvatarUrl(authUser?.photoURL || currentUser.avatar, authUser?.displayName || currentUser.name)}
                       />
                       <div className="min-w-0">
                         <p className="font-semibold text-sm text-[#131b2e] truncate">

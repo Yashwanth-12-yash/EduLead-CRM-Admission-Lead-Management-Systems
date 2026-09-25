@@ -30,15 +30,17 @@ export async function getOrCreateUser(uid: string, email: string, name?: string)
       return updated[0];
     }
 
+    const userName = name || email.split('@')[0];
     const inserted = await db
       .insert(users)
       .values({
         id: `user-${Date.now()}`,
         uid,
         email,
-        name: name || email.split('@')[0],
+        name: userName,
         role: 'COUNSELLOR',
         title: 'Officer',
+        avatar: `https://ui-avatars.com/api/?name=${encodeURIComponent(userName)}&background=004ac6&color=fff`,
       })
       .returning();
 

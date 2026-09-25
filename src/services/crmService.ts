@@ -46,6 +46,13 @@ export function getAgeingCategory(ageInDays: number): AgeingCategory {
   return 'Severely Overdue';
 }
 
+export function getSafeAvatarUrl(avatar?: string | null, name?: string | null, bgColor = '004ac6'): string {
+  if (avatar && typeof avatar === 'string' && avatar.trim() !== '') {
+    return avatar.trim();
+  }
+  return `https://ui-avatars.com/api/?name=${encodeURIComponent(name || 'User')}&background=${bgColor}&color=fff`;
+}
+
 class CrmService {
   private leads: Lead[] = [];
   private followUps: FollowUp[] = [];
@@ -89,7 +96,11 @@ class CrmService {
       this.activities = storedActivities ? JSON.parse(storedActivities) : INITIAL_ACTIVITIES;
 
       const storedCounsellors = localStorage.getItem(STORAGE_KEYS.COUNSELLORS);
-      this.counsellors = storedCounsellors ? JSON.parse(storedCounsellors) : INITIAL_COUNSELLORS;
+      const rawCounsellors = storedCounsellors ? JSON.parse(storedCounsellors) : INITIAL_COUNSELLORS;
+      this.counsellors = rawCounsellors.map((c: Counsellor) => ({
+        ...c,
+        avatar: getSafeAvatarUrl(c.avatar, c.name),
+      }));
 
       const storedCourses = localStorage.getItem(STORAGE_KEYS.COURSES);
       this.courses = storedCourses ? JSON.parse(storedCourses) : INITIAL_COURSES;
@@ -136,7 +147,7 @@ class CrmService {
             email: u.email,
             role: u.role,
             title: u.title || 'Officer',
-            avatar: u.avatar || '',
+            avatar: getSafeAvatarUrl(u.avatar, u.name),
             activeLeadsCount: u.activeLeadsCount || 0,
             maxCapacity: u.maxCapacity || 40,
             status: u.status || 'available',

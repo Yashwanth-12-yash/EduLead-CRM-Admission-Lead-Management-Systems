@@ -1,5 +1,6 @@
 import React, { useState, useMemo } from 'react';
 import { useCrm } from '../../context/CrmContext';
+import { getSafeAvatarUrl } from '../../services/crmService';
 
 export const LeadAssignmentHub: React.FC = () => {
   const {
@@ -160,7 +161,7 @@ export const LeadAssignmentHub: React.FC = () => {
               >
                 <div className="flex items-start justify-between gap-2">
                   <div className="flex items-center gap-2.5 min-w-0">
-                    <img className="w-9 h-9 rounded-full object-cover shrink-0 ring-1 ring-white" src={c.avatar} alt={c.name} />
+                    <img className="w-9 h-9 rounded-full object-cover shrink-0 ring-1 ring-white" src={getSafeAvatarUrl(c.avatar, c.name)} alt={c.name} />
                     <div className="min-w-0">
                       <div className="flex items-center gap-1.5 flex-wrap">
                         <span className="font-bold text-xs text-[#131b2e] truncate">{c.name}</span>

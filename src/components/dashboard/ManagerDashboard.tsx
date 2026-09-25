@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
 import { useCrm } from '../../context/CrmContext';
+import { getSafeAvatarUrl } from '../../services/crmService';
 
 export const ManagerDashboard: React.FC = () => {
   const {
@@ -560,7 +561,7 @@ export const ManagerDashboard: React.FC = () => {
                   <div className="relative shrink-0">
                     <img
                       className="w-10 h-10 rounded-full object-cover shrink-0 ring-1 ring-[#eaedff]"
-                      src={c.avatar}
+                      src={getSafeAvatarUrl(c.avatar, c.name, '6366f1')}
                       alt={c.name}
                     />
                     {c.rank === 1 && (

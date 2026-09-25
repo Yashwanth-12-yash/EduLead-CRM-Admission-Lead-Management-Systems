@@ -1,5 +1,6 @@
 import React, { useState, useMemo } from 'react';
 import { useCrm } from '../../context/CrmContext';
+import { getSafeAvatarUrl } from '../../services/crmService';
 
 export const GlobalSearchModal: React.FC = () => {
   const {
@@ -168,7 +169,7 @@ export const GlobalSearchModal: React.FC = () => {
                     className="w-full text-left p-2 rounded-lg hover:bg-[#eaedff] transition-colors flex items-center justify-between text-xs"
                   >
                     <div className="flex items-center gap-2">
-                      <img className="w-6 h-6 rounded-full object-cover" src={cn.avatar} alt={cn.name} />
+                      <img className="w-6 h-6 rounded-full object-cover" src={getSafeAvatarUrl(cn.avatar, cn.name)} alt={cn.name} />
                       <div>
                         <strong className="text-[#131b2e] block">{cn.name}</strong>
                         <span className="text-[11px] text-[#737686]">{cn.title} • {cn.activeLeadsCount} active</span>

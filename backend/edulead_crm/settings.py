@@ -39,7 +39,13 @@ INSTALLED_APPS = [
     'rest_framework_simplejwt',
     'corsheaders',
     'drf_spectacular',
+
+    # EduLead CRM Local Apps
+    'users.apps.UsersConfig',
+    'leads.apps.LeadsConfig',
 ]
+
+AUTH_USER_MODEL = 'users.User'
 
 MIDDLEWARE = [
     # CorsMiddleware must be at the very top of MIDDLEWARE
@@ -76,14 +82,41 @@ ASGI_APPLICATION = 'edulead_crm.asgi.application'
 
 # Database Configuration (PostgreSQL)
 # Environment variables: DB_NAME, DB_USER, DB_PASSWORD, DB_HOST, DB_PORT
+# Supports standard DB_* variables with Cloud SQL Unix socket / port fallbacks
+raw_db_host = os.getenv('DB_HOST', '')
+if raw_db_host and raw_db_host != 'localhost':
+    DB_HOST = raw_db_host
+else:
+    DB_HOST = os.getenv('SQL_HOST') or raw_db_host or 'localhost'
+
+raw_db_user = os.getenv('DB_USER', '')
+if raw_db_user and raw_db_user != 'postgres':
+    DB_USER = raw_db_user
+else:
+    DB_USER = os.getenv('SQL_USER') or raw_db_user or 'postgres'
+
+raw_db_pass = os.getenv('DB_PASSWORD', '')
+if raw_db_pass and raw_db_pass != 'postgres':
+    DB_PASSWORD = raw_db_pass
+else:
+    DB_PASSWORD = os.getenv('SQL_PASSWORD') or raw_db_pass or ''
+
+raw_db_name = os.getenv('DB_NAME', '')
+if raw_db_name and raw_db_name not in ('edulead_crm', 'postgres'):
+    DB_NAME = raw_db_name
+else:
+    DB_NAME = os.getenv('SQL_DB_NAME') or raw_db_name or 'edulead_crm'
+
+DB_PORT = os.getenv('DB_PORT', '5432')
+
 DATABASES = {
     'default': {
         'ENGINE': 'django.db.backends.postgresql',
-        'NAME': os.getenv('DB_NAME', 'edulead_crm'),
-        'USER': os.getenv('DB_USER', 'postgres'),
-        'PASSWORD': os.getenv('DB_PASSWORD', ''),
-        'HOST': os.getenv('DB_HOST', 'localhost'),
-        'PORT': os.getenv('DB_PORT', '5432'),
+        'NAME': DB_NAME,
+        'USER': DB_USER,
+        'PASSWORD': DB_PASSWORD,
+        'HOST': DB_HOST,
+        'PORT': DB_PORT,
         'CONN_MAX_AGE': 60,
     }
 }

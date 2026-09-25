@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
 import { useCrm } from '../../context/CrmContext';
+import { getSafeAvatarUrl } from '../../services/crmService';
 
 export const ReportsView: React.FC = () => {
   const { metrics, counsellors, courses, showToast } = useCrm();
@@ -483,7 +484,7 @@ export const ReportsView: React.FC = () => {
               >
                 <div className="flex items-center gap-2.5">
                   <div className="relative shrink-0">
-                    <img className="w-10 h-10 rounded-full object-cover shadow-xs" src={c.avatar} alt={c.name} />
+                    <img className="w-10 h-10 rounded-full object-cover shadow-xs" src={getSafeAvatarUrl(c.avatar, c.name)} alt={c.name} />
                     <span
                       className={`absolute -top-1 -left-1 w-4 h-4 rounded-full text-[10px] font-bold flex items-center justify-center shadow-xs ${
                         idx === 0

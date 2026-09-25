@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { useCrm } from '../../context/CrmContext';
 import { ActivityType, LeadStatus, LeadPriority } from '../../types';
-import { calculateLeadAge, getAgeingCategory } from '../../services/crmService';
+import { calculateLeadAge, getAgeingCategory, getSafeAvatarUrl } from '../../services/crmService';
 
 export const LeadDetailsModal: React.FC = () => {
   const {
@@ -126,7 +126,7 @@ export const LeadDetailsModal: React.FC = () => {
                 <div className="relative shrink-0">
                   <img
                     className="w-14 h-14 rounded-full object-cover shadow-sm ring-2 ring-white"
-                    src={selectedLead.avatar || 'https://lh3.googleusercontent.com/aida-public/AB6AXuC3RFbOM7C28E28lI4APUFP8aeAwKkDxW-DySMN4xf9PAMtL4A3K1rx2GPLQHpG-1u5HlZ929_JCCdRpRlbcjMCx77JxlQoIM1-uBEkyXVwGv8tFCapsbf66o8t1N8FsDPp0Ehe1Sfiqnp7HbktoRgE6F0yGCRY_0W3Ks40HvWy1rfDBbXBZxv7eR0_2eyvf0vwgSjPGah2VQgcF5r2CDTKydPrwH0rqjmcLrhp9qIdkdUFuw25uM7RvA'}
+                    src={getSafeAvatarUrl(selectedLead.avatar, selectedLead.name, '007793')}
                     alt={selectedLead.name}
                   />
                   <div className="absolute -bottom-1 -right-1 bg-white rounded-full p-0.5 shadow-xs">

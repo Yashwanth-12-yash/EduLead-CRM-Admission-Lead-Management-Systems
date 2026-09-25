@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { useCrm } from '../../context/CrmContext';
 import { Role } from '../../types';
+import { getSafeAvatarUrl } from '../../services/crmService';
 
 export const SettingsView: React.FC = () => {
   const {
@@ -81,7 +82,7 @@ export const SettingsView: React.FC = () => {
                       : 'bg-[#f2f3ff] border-[#dae2fd]'
                   }`}
                 >
-                  <img className="w-8 h-8 rounded-full object-cover" src={c.avatar} alt={c.name} />
+                  <img className="w-8 h-8 rounded-full object-cover" src={getSafeAvatarUrl(c.avatar, c.name)} alt={c.name} />
                   <div className="truncate">
                     <strong className="block text-[#131b2e] truncate">{c.name}</strong>
                     <span className="text-[10px] text-[#737686]">{c.title}</span>

@@ -1,0 +1,6 @@
+{
+  "name": "EduLead CRM — Admission Lead Management System",
+  "description": "Comprehensive admission lead management system for educational institutions to track, assign, nurture, and convert student inquiries across all channels.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
